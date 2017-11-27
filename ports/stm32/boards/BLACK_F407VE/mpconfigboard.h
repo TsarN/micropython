@@ -5,7 +5,7 @@
 
 #define MICROPY_HW_HAS_SWITCH       (1)		// has 2 buttons KEY0=PE4, KEY1=PE3
 #define MICROPY_HW_HAS_FLASH        (1)
-#define MICROPY_HW_HAS_SDCARD       (0)		// it has a sd scard, but i am not sure what the detect pin is, yet
+#define MICROPY_HW_HAS_SDCARD       (1)		// it has a sd scard, but i am not sure what the detect pin is, yet
 #define MICROPY_HW_HAS_MMA7660      (0)
 #define MICROPY_HW_HAS_LIS3DSH      (0)
 #define MICROPY_HW_HAS_LCD          (0)		// has a ILI9341 TFT connector
@@ -124,10 +124,10 @@
 #define MICROPY_HW_LED_ON(pin)      (mp_hal_pin_low(pin))
 #define MICROPY_HW_LED_OFF(pin)     (mp_hal_pin_high(pin))
 
-// SD card detect switch
-//	#define MICROPY_HW_SDCARD_DETECT_PIN        (pin_A8)	// nope
-//	#define MICROPY_HW_SDCARD_DETECT_PULL       (GPIO_PULLUP)
-//	#define MICROPY_HW_SDCARD_DETECT_PRESENT    (GPIO_PIN_RESET)
+// SD card detect switch, let there be always an sd card
+#define MICROPY_HW_SDCARD_DETECT_PIN        (pin_E15)
+#define MICROPY_HW_SDCARD_DETECT_PULL       (GPIO_PULLUP)
+#define MICROPY_HW_SDCARD_DETECT_PRESENT    (GPIO_PIN_SET)
 // 1      - PC10 - DAT2/RES
 // 2      - PC11 - CD/DAT3/CS
 // 3      - PD2  - CMD/DI
