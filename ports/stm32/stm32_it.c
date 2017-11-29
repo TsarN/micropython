@@ -648,12 +648,12 @@ void TIM8_BRK_TIM12_IRQHandler(void) {
     IRQ_EXIT(TIM8_BRK_TIM12_IRQn);
 }
 
-void TIM8_UP_TIM13_IRQHandler(void) {
+/*void TIM8_UP_TIM13_IRQHandler(void) {
     IRQ_ENTER(TIM8_UP_TIM13_IRQn);
     timer_irq_handler(8);
     timer_irq_handler(13);
     IRQ_EXIT(TIM8_UP_TIM13_IRQn);
-}
+}*/
 
 #if defined(MCU_SERIES_L4)
 void TIM8_UP_IRQHandler(void) {

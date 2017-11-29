@@ -1,0 +1,1 @@
+__import__('gamebox_firmware', globals(), locals(), [], 0)

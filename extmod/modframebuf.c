@@ -32,6 +32,8 @@
 #if MICROPY_PY_FRAMEBUF
 
 #include "ports/stm32/font_petme128_8x8.h"
+#include "ports/stm32/font_5x7.h"
+#include "ports/stm32/font_digits_3x5.h"
 
 typedef struct _mp_obj_framebuf_t {
     mp_obj_base_t base;
@@ -57,6 +59,14 @@ typedef struct _mp_framebuf_p_t {
 #define FRAMEBUF_GS4_HMSB (2)
 #define FRAMEBUF_MHLSB    (3)
 #define FRAMEBUF_MHMSB    (4)
+#define FRAMEBUF_RGB332   (5)
+
+// constants for fonts
+#define FRAMEBUF_PETME128 (0)
+#define FRAMEBUF_ARDUINO (1)
+#define FRAMEBUF_DIGITS (2)
+
+#define FRAMEBUF_TOTAL_FONTS (3)
 
 // Functions for MHLSB and MHMSB
 
@@ -107,6 +117,26 @@ STATIC void mvlsb_fill_rect(const mp_obj_framebuf_t *fb, int x, int y, int w, in
             ++b;
         }
         ++y;
+    }
+}
+
+// Functions for RGB332 format
+
+STATIC void rgb332_setpixel(const mp_obj_framebuf_t *fb, int x, int y, uint32_t col) {
+    ((uint8_t*)fb->buf)[x + y * fb->stride] = col;
+}
+
+STATIC uint32_t rgb332_getpixel(const mp_obj_framebuf_t *fb, int x, int y) {
+    return ((uint8_t*)fb->buf)[x + y * fb->stride];
+}
+
+STATIC void rgb332_fill_rect(const mp_obj_framebuf_t *fb, int x, int y, int w, int h, uint32_t col) {
+    uint8_t *b = &((uint8_t*)fb->buf)[x + y * fb->stride];
+    while (h--) {
+        for (int ww = w; ww; --ww) {
+            *b++ = col;
+        }
+        b += fb->stride - w;
     }
 }
 
@@ -184,6 +214,7 @@ STATIC void gs4_hmsb_fill_rect(const mp_obj_framebuf_t *fb, int x, int y, int w,
 STATIC mp_framebuf_p_t formats[] = {
     [FRAMEBUF_MVLSB] = {mvlsb_setpixel, mvlsb_getpixel, mvlsb_fill_rect},
     [FRAMEBUF_RGB565] = {rgb565_setpixel, rgb565_getpixel, rgb565_fill_rect},
+    [FRAMEBUF_RGB332] = {rgb332_setpixel, rgb332_getpixel, rgb332_fill_rect},
     [FRAMEBUF_GS4_HMSB] = {gs4_hmsb_setpixel, gs4_hmsb_getpixel, gs4_hmsb_fill_rect},
     [FRAMEBUF_MHLSB] = {mono_horiz_setpixel, mono_horiz_getpixel, mono_horiz_fill_rect},
     [FRAMEBUF_MHMSB] = {mono_horiz_setpixel, mono_horiz_getpixel, mono_horiz_fill_rect},
@@ -235,6 +266,7 @@ STATIC mp_obj_t framebuf_make_new(const mp_obj_type_t *type, size_t n_args, size
     switch (o->format) {
         case FRAMEBUF_MVLSB:
         case FRAMEBUF_RGB565:
+        case FRAMEBUF_RGB332:
             break;
         case FRAMEBUF_MHLSB:
         case FRAMEBUF_MHMSB:
@@ -421,8 +453,18 @@ STATIC mp_obj_t framebuf_blit(size_t n_args, const mp_obj_t *args) {
     mp_int_t x = mp_obj_get_int(args[2]);
     mp_int_t y = mp_obj_get_int(args[3]);
     mp_int_t key = -1;
+    mp_int_t ncolor = -1;
+    mp_int_t nbcolor = 0;
     if (n_args > 4) {
         key = mp_obj_get_int(args[4]);
+    }
+
+    if (n_args > 5) {
+        ncolor = mp_obj_get_int(args[5]);
+    }
+
+    if (n_args > 6) {
+        nbcolor = mp_obj_get_int(args[6]);
     }
 
     if (
@@ -447,6 +489,13 @@ STATIC mp_obj_t framebuf_blit(size_t n_args, const mp_obj_t *args) {
         int cx1 = x1;
         for (int cx0 = x0; cx0 < x0end; ++cx0) {
             uint32_t col = getpixel(source, cx1, y1);
+            if (ncolor != -1) {
+                if (col) {
+                    col = (uint32_t)ncolor;
+                } else {
+                    col = (uint32_t)nbcolor;
+                }
+            }
             if (col != (uint32_t)key) {
                 setpixel(self, cx0, y0, col);
             }
@@ -456,7 +505,7 @@ STATIC mp_obj_t framebuf_blit(size_t n_args, const mp_obj_t *args) {
     }
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(framebuf_blit_obj, 4, 5, framebuf_blit);
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(framebuf_blit_obj, 4, 7, framebuf_blit);
 
 STATIC mp_obj_t framebuf_scroll(mp_obj_t self_in, mp_obj_t xstep_in, mp_obj_t ystep_in) {
     mp_obj_framebuf_t *self = MP_OBJ_TO_PTR(self_in);
@@ -497,36 +546,84 @@ STATIC mp_obj_t framebuf_text(size_t n_args, const mp_obj_t *args) {
     mp_int_t x0 = mp_obj_get_int(args[2]);
     mp_int_t y0 = mp_obj_get_int(args[3]);
     mp_int_t col = 1;
+    mp_int_t font = FRAMEBUF_PETME128;
     if (n_args >= 5) {
         col = mp_obj_get_int(args[4]);
     }
 
-    // loop over chars
-    for (; *str; ++str) {
-        // get char and make sure its in range of font
-        int chr = *(uint8_t*)str;
-        if (chr < 32 || chr > 127) {
-            chr = 127;
-        }
-        // get char data
-        const uint8_t *chr_data = &font_petme128_8x8[(chr - 32) * 8];
-        // loop over char data
-        for (int j = 0; j < 8; j++, x0++) {
-            if (0 <= x0 && x0 < self->width) { // clip x
-                uint vline_data = chr_data[j]; // each byte is a column of 8 pixels, LSB at top
-                for (int y = y0; vline_data; vline_data >>= 1, y++) { // scan over vertical column
-                    if (vline_data & 1) { // only draw if pixel set
-                        if (0 <= y && y < self->height) { // clip y
-                            setpixel(self, x0, y, col);
+    if (n_args > 5) {
+        font = mp_obj_get_int(args[5]);
+        if (font >= FRAMEBUF_TOTAL_FONTS || font < 0)
+            font = FRAMEBUF_PETME128;
+    }
+
+    if (font == FRAMEBUF_PETME128) {
+        // loop over chars
+        for (; *str; ++str) {
+            // get char and make sure its in range of font
+            int chr = *(uint8_t*)str;
+            if (chr < 32 || chr > 127) {
+                chr = 127;
+            }
+            // get char data
+            const uint8_t *chr_data = &font_petme128_8x8[(chr - 32) * 8];
+            // loop over char data
+            for (int j = 0; j < 8; j++, x0++) {
+                if (0 <= x0 && x0 < self->width) { // clip x
+                    uint vline_data = chr_data[j]; // each byte is a column of 8 pixels, LSB at top
+                    for (int y = y0; vline_data; vline_data >>= 1, y++) { // scan over vertical column
+                        if (vline_data & 1) { // only draw if pixel set
+                            if (0 <= y && y < self->height) { // clip y
+                                setpixel(self, x0, y, col);
+                            }
                         }
                     }
                 }
             }
         }
     }
+
+    if (font == FRAMEBUF_ARDUINO) {
+        int x = x0;
+        for (; *str; ++str) {
+            uint8_t chr = *(uint8_t*)str;
+            int pos = (int)chr * 7;
+            for (int i = 0; i < 5; ++i) {
+                for (int j = 0; j < 7; ++j) {
+                    uint8_t d = font_5x7_data[pos + j];
+                    if ((d >> (4 - i)) & 1)
+                        setpixel(self, x + i, y0 + j, col);
+                }
+            }
+
+            x += 6;
+        }
+    }
+
+    if (font == FRAMEBUF_DIGITS) {
+        int x = x0;
+        for (; *str; ++str) {
+            uint8_t chr = *(uint8_t*)str;
+
+            if (chr >= '0' && chr <= '9') {
+                chr -= '0';
+                int pos = (int)chr * 5;
+                for (int i = 0; i < 3; ++i) {
+                    for (int j = 0; j < 5; ++j) {
+                        uint8_t d = font_digits_3x5_data[pos + j];
+                        if ((d >> (2 - i)) & 1)
+                            setpixel(self, x + i, y0 + j, col);
+                    }
+                }
+            }
+
+            x += 4;
+        }
+    }
+
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(framebuf_text_obj, 4, 5, framebuf_text);
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(framebuf_text_obj, 4, 6, framebuf_text);
 
 STATIC const mp_rom_map_elem_t framebuf_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_fill), MP_ROM_PTR(&framebuf_fill_obj) },
@@ -579,9 +676,13 @@ STATIC const mp_rom_map_elem_t framebuf_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_MVLSB), MP_ROM_INT(FRAMEBUF_MVLSB) },
     { MP_ROM_QSTR(MP_QSTR_MONO_VLSB), MP_ROM_INT(FRAMEBUF_MVLSB) },
     { MP_ROM_QSTR(MP_QSTR_RGB565), MP_ROM_INT(FRAMEBUF_RGB565) },
+    { MP_ROM_QSTR(MP_QSTR_RGB332), MP_ROM_INT(FRAMEBUF_RGB332) },
     { MP_ROM_QSTR(MP_QSTR_GS4_HMSB), MP_ROM_INT(FRAMEBUF_GS4_HMSB) },
     { MP_ROM_QSTR(MP_QSTR_MONO_HLSB), MP_ROM_INT(FRAMEBUF_MHLSB) },
     { MP_ROM_QSTR(MP_QSTR_MONO_HMSB), MP_ROM_INT(FRAMEBUF_MHMSB) },
+    { MP_ROM_QSTR(MP_QSTR_PETME128), MP_ROM_INT(FRAMEBUF_PETME128) },
+    { MP_ROM_QSTR(MP_QSTR_ARDUINO), MP_ROM_INT(FRAMEBUF_ARDUINO) },
+    { MP_ROM_QSTR(MP_QSTR_DIGITS), MP_ROM_INT(FRAMEBUF_DIGITS) },
 };
 
 STATIC MP_DEFINE_CONST_DICT(framebuf_module_globals, framebuf_module_globals_table);

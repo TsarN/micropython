@@ -125,7 +125,7 @@
 #define MICROPY_HW_LED_OFF(pin)     (mp_hal_pin_high(pin))
 
 // SD card detect switch, let there be always an sd card
-#define MICROPY_HW_SDCARD_DETECT_PIN        (pin_E15)
+#define MICROPY_HW_SDCARD_DETECT_PIN        (pin_B1)
 #define MICROPY_HW_SDCARD_DETECT_PULL       (GPIO_PULLUP)
 #define MICROPY_HW_SDCARD_DETECT_PRESENT    (GPIO_PIN_SET)
 // 1      - PC10 - DAT2/RES

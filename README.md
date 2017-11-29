@@ -1,4 +1,16 @@
-[![Build Status](https://travis-ci.org/micropython/micropython.png?branch=master)](https://travis-ci.org/micropython/micropython) [![Coverage Status](https://coveralls.io/repos/micropython/micropython/badge.png?branch=master)](https://coveralls.io/r/micropython/micropython?branch=master)
+
+Modifications
+=============
+
+`framebuf` module:
+- Added RGB332 pixel format
+- Added two more fonts (5x7 cp1251, 3x5 digits). Use PETME, ARDUINO or DIGITS as fifth argument to `text` method
+- `blit` now can take two more arguments: non zero color, zero color. It is useful for blitting monochrome images onto color framebuf
+
+`_ledmatrix` module added:
+- `_ledmatrix.init()` -- initialize LED Matrix and return frame buffer address
+- It uses TIM13 UP interrupt, so TIM13 (and probably TIM8) is now unavailable to user
+
 
 The MicroPython project
 =======================
